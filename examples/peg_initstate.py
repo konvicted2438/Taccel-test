@@ -19,7 +19,7 @@ parser.add_argument("--num_envs", default=4, type=int)
 parser.add_argument("--export_mesh", action="store_true")
 args = parser.parse_args()
 
-DATETIME_TAG, OUT_DIR = init_robot_demo(args, "peg_in_hole-detro-multi")
+OUT_DIR = init_robot_demo(args, "peg_initstate", "kurt_testplay")
 
 dt = 1 / 50
 env_pos = (
@@ -139,7 +139,31 @@ if __name__ == "__main__":
         model.set_soft_kinematic_constraint(sensor_handles[env_id][0], stick_mask)
         model.set_soft_kinematic_constraint(sensor_handles[env_id][1], stick_mask)
 
+    # Setting initial positions of sensors:
+    t = 0
+    sensor_points = np.array(sensor.points)
+    T_1, T_2 = np.eye(4), np.eye(4)
+    T_1[:3, 3] = sensor_1_p_traj[min(t, len(sensor_1_p_traj) - 1)]
+    T_1[:3, :3] = R.from_quat(sensor_1_q_traj[min(t, len(sensor_1_p_traj) - 1)]).as_matrix()
+
+    T_2[:3, 3] = sensor_2_p_traj[min(t, len(sensor_2_p_traj) - 1)]
+    T_2[:3, :3] = R.from_quat(sensor_2_q_traj[min(t, len(sensor_2_p_traj) - 1)]).as_matrix()
+
+    s1_target = sensor_points @ T_1[:3, :3].T + T_1[:3, 3]
+    s2_target = sensor_points @ T_2[:3, :3].T + T_2[:3, 3]
+
+    for env_id in range(args.num_envs):
+        if t == 0:
+            model.set_soft_state(sensor_handles[env_id][0], s1_target + env_pos[env_id])
+            model.set_soft_state(sensor_handles[env_id][1], s2_target + env_pos[env_id])
     model.finalize()
+
+    WRITE_INIT_SCENE = True
+    if WRITE_INIT_SCENE:
+        model.apply_set_state()
+        model.write_scene(f"{OUT_DIR}/frames/frame_0.ply")
+        quit()
+
 
     sensor_points = np.array(sensor.points)
 
@@ -179,6 +203,6 @@ if __name__ == "__main__":
         log.separate()
 
         if args.export_mesh:
-            model.write_scene(f"{OUT_DIR}/frames/peg_in_hole-detro-multi-{t}.ply")
+            model.write_scene(f"{OUT_DIR}/frames/frame_{t}.ply")
 
         tqdm.write(f"Curr sim speed {(t + 1) * args.num_envs / sim_time} FPS")

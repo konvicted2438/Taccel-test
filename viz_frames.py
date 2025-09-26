@@ -1,4 +1,5 @@
 import open3d as o3d
+from open3d.visualization.rendering import OffscreenRenderer, MaterialRecord, Scene
 import time
 import os
 import glob
@@ -11,18 +12,20 @@ import numpy as np
 
 # Use case: python examples/viz/viz_frames.py /path/to/run/dir
 folder_path = sys.argv[1]
+ # set FPS = 1/dt to play in real-time, since you capture a frame at each timestep.
+ # set FPS = 2*(1/dt) to play in 2x real-time, or 0.5*(1/dt) to play in slow motion.
 FPS = 25
-
+         
 
 def find_ply_files(folder):
     """Finds and sorts ply files numerically based on the number in the filename."""
-    pattern = os.path.join(folder, "frame_*.ply")
+    pattern = os.path.join(folder, "frame_*.ply") #ensure files are named frame_*.py
     files = glob.glob(pattern)
 
     def sort_key(filepath):
         filename = os.path.basename(filepath)
         # Extract number using regex (handles varying digits)
-        match = re.search(r"frame-(\d+)\.ply", filename)
+        match = re.search(r"(\d+)\.ply", filename) # organizes files via ascending order/number
         if match:
             return int(match.group(1))
         return float("inf")  # Put files that don't match at the end
@@ -257,5 +260,82 @@ def main():
     print("Visualization finished.")
 
 
+def export_video_offscreen(view_angle="default", width=1024, height=768):
+    ply_files_sorted = find_ply_files(folder_path)
+    if not ply_files_sorted:
+        return
+
+    print(f"[Headless Export] Exporting {len(ply_files_sorted)} frames (offscreen)...")
+
+    video_filename = os.path.join(folder_path, f"offscreen_{view_angle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    video_writer = cv2.VideoWriter(video_filename, fourcc, FPS, (width, height))
+
+    # Set up the renderer
+    renderer = OffscreenRenderer(width, height)
+    renderer.scene.set_background([1, 1, 1, 1])  # white background
+    renderer.scene.scene.set_indirect_light_intensity(1000)
+    renderer.scene.scene.enable_sun_light(True)
+
+    # --- Compute global bounding box across all frames ---
+    all_bounds = [o3d.io.read_triangle_mesh(f).get_axis_aligned_bounding_box() for f in ply_files_sorted]
+    combined_bounds = all_bounds[0]
+    for b in all_bounds[1:]:
+        combined_bounds += b
+
+    center = combined_bounds.get_center()
+    extent = combined_bounds.get_extent().max()
+
+    # --- Set fixed camera parameters ---
+    if view_angle == "top":
+        eye = center + np.array([0, 0, extent * 2])
+        up = [0, 1, 0]
+    elif view_angle == "front":
+        eye = center + np.array([0, -extent * 2, 0])
+        up = [0, 0, 1]
+    else:  # default iso
+        eye = center + np.array([extent, extent, extent])
+        up = [0, 0, 1]
+
+    camera_center = center.astype(np.float32)
+    camera_eye = eye.astype(np.float32)
+    camera_up = np.array(up, dtype=np.float32)
+
+    for i, file in enumerate(ply_files_sorted):
+        mesh = o3d.io.read_triangle_mesh(file)
+        mesh.compute_vertex_normals()
+
+        renderer.scene.clear_geometry()
+
+        material = MaterialRecord()
+        material.shader = "defaultLit"
+
+        renderer.scene.add_geometry("mesh", mesh, material)
+
+        # Reuse fixed camera view
+        renderer.setup_camera(60.0, camera_center, camera_eye, camera_up)
+
+        img = renderer.render_to_image()
+        img_np = np.asarray(img)
+        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+        label = os.path.basename(file)
+        cv2.putText(img_bgr, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+
+        video_writer.write(img_bgr)
+        print(f"[Headless Export] Frame {i+1}/{len(ply_files_sorted)}")
+
+    video_writer.release()
+    print(f"[Headless Export] Saved to: {video_filename}")
+
+
+
+
 if __name__ == "__main__":
-    main()
+    # Use case: python examples/viz/viz_frames.py /path/to/run/dir --export front
+    if len(sys.argv) > 2 and sys.argv[2] == "--export":
+        view_angle = sys.argv[3] if len(sys.argv) > 3 else "default"
+        export_video_offscreen(view_angle=view_angle)
+    else:
+        # Use case: python examples/viz/viz_frames.py /path/to/run/dir 
+        main()
