@@ -25,7 +25,7 @@ parser.add_argument("--viz", action="store_true")
 
 args = parser.parse_args()
 
-OUT_DIR = init_robot_demo(args, "drop_softfingers", "finray_testplay")
+OUT_DIR = init_robot_demo(args, "finray_grasping", "finray_grasping")
 
 dt = 1 / 50
 env_pos = (
@@ -38,36 +38,6 @@ env_pos = (
     .cpu()
     .numpy()
 )
-
-def plot_net_Fz_vs_simtime(net_Fz_list, dt, weight_force_object: float,
-                           current_design_iter, total_sim_time):
-
-    net_Fzs = np.array(net_Fz_list)
-    time = np.linspace(dt, total_sim_time, num=len(net_Fzs), endpoint=True)
-
-    plt.figure(figsize=(8, 4))  # Optional: control figure size
-    plt.plot(time, net_Fzs, 'o', label='Net $F_z$ Gripper')
-
-    label = '$m_{obj}g = $'
-    label += f"{round(weight_force_object, 2)}N"
-    plt.axhline(weight_force_object, color='red', linestyle='--', label=label)
-
-    # Compute dynamic y-axis limits
-    y_min = min(net_Fzs.min(), weight_force_object)
-    y_max = max(net_Fzs.max(), weight_force_object)
-    y_range = y_max - y_min
-    padding = 0.05 * y_range if y_range > 0 else 1.0  # avoid zero padding
-    plt.ylim(y_min - padding, y_max + padding)
-
-    plt.xlabel('t (s)')
-    plt.ylabel('Force (N)')
-    plt.title(f"{current_design_iter} Force-Generation Capability")
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(os.path.join(OUT_DIR, f"{current_design_iter}_net_Fz_vs_time.png"))
-    plt.close() 
-
 
 if __name__ == "__main__":
 
@@ -94,9 +64,10 @@ if __name__ == "__main__":
     left_softfinger.points *= scale
     objects_sphere.points *= 1
 
-    stick_idx = np.load(os.path.join("finray_test", "in_box_indices.npy")).astype(np.int64)
-    stick_mask = np.zeros(left_softfinger.n_points, dtype=np.int32)
-    stick_mask[stick_idx] = 1
+    slide_idx = np.load(os.path.join("finray_test", "in_box_indices.npy")).astype(np.int64)
+    slide_mask = np.zeros(left_softfinger.n_points, dtype=np.int32)
+    slide_mask[slide_idx] = 1
+
 
     left_softfinger_handles, right_softfinger_handles, objects_sphere_handles = [],[],[]
     for env_id in range(args.num_envs):
@@ -107,13 +78,13 @@ if __name__ == "__main__":
         # Rx/y/z(theta) rotates theta degrees CCW when looking from origin toward +x/y/z
         # NOTE: From left to right, Rx acts first, then Ry - and the matrix multiplication is NOT commutative!
         mesh1.points = mesh1.points @ Rx(np.radians(-90)) @ Ry(np.radians(90)) @ Rz(np.radians(-90)) + env_pos[env_id] + np.array([0.2, 0.4, 0.0]) #(106,3) @ (3,3) + (3,)
-        left_softfinger_handle = model.add_soft_vol_body(mesh1, density=1e3, E=1e5, nu=0.4, mu=1.0, env_id=env_id) 
+        left_softfinger_handle = model.add_soft_vol_body(mesh1, density=1e3, E=1.3e6, nu=0.4, mu=1.0, env_id=env_id) 
         left_softfinger_handles.append(left_softfinger_handle)
 
         #  # Rx/y/z(theta) rotates theta degrees CCW when looking from origin toward +x/y/z
         # # NOTE: From left to right, Rx acts first, then Ry - and the matrix multiplication is NOT commutative!
         mesh2.points = mesh2.points @ Rx(np.radians(-90)) @ Ry(np.radians(-90)) @ Rz(np.radians(90)) + env_pos[env_id] + np.array([0.5, 0.4, 0.0]) #(106,3) @ (3,3) + (3,)
-        right_softfinger_handle = model.add_soft_vol_body(mesh2, density=1e3, E=1e5, nu=0.4, mu=1.0, env_id=env_id) 
+        right_softfinger_handle = model.add_soft_vol_body(mesh2, density=1e3, E=1.3e6, nu=0.4, mu=1.0, env_id=env_id) 
         right_softfinger_handles.append(right_softfinger_handle)
 
 
@@ -126,7 +97,17 @@ if __name__ == "__main__":
     # Setup simulation
     model.init()
 
-    # Integrator setup
+    for env_id in range(args.num_envs):
+        model.set_soft_kinematic_constraint(left_softfinger_handles[env_id], slide_mask)
+        model.set_soft_kinematic_constraint(right_softfinger_handles[env_id], slide_mask)
+
+    model.kinematic_helper.set_initial_stiffness(1e8)
+
+
+        # IMPORTANT: Finalize model before setting up renderer
+    model.finalize()
+
+        # Integrator setup
     integrator = IPCIntegrator()
     integrator.use_hard_kinematic_constraint = False
     integrator.use_cpu = False
@@ -137,10 +118,7 @@ if __name__ == "__main__":
     integrator.inversion_free_im_tol = 1e-6
     integrator.inversion_free_cubic_coef_tol = 1e-10
     integrator.soft_vol_material_type = VolMaterialType.NEO_HOOKEAN
-    model.kinematic_helper.set_initial_stiffness(1e8)
 
-    # IMPORTANT: Finalize model before setting up renderer
-    model.finalize()
 
     # Set up visualization AFTER model.finalize()
     if args.viz:
@@ -152,14 +130,46 @@ if __name__ == "__main__":
             near_plane=0.001,
             far_plane=20.0,
             camera_fov=75.0,
-            camera_pos=(2.0, 1.0, 2.0),
+            camera_pos=(0.5, 1.0, 2.0),
             camera_front=(0.0, -1.0, -2.0),
             camera_up=(0.0, 1.0, 0.0),
         )
 
+
+    # parameter for the kinematic control
+    SLIDE_DISTANCE = 0.1
+    LIFT_DISTANCE = 0.05
+    total_timesteps = 100
+
     # Start simulation
     sim_time = 0
-    for t in tqdm(range(50)):
+    for t in tqdm(range(total_timesteps)):
+
+        for env_id in range(args.num_envs):
+
+            # SLIDING
+            if t < int(total_timesteps/2):
+                # Setting new targets for L/R fingers to be previous node positions
+                left_targets = model.get_body_x(left_softfinger_handles[env_id])
+                right_targets = model.get_body_x(right_softfinger_handles[env_id])
+                # Manually setting targets for L/R upper idxs to compress them
+                left_targets[slide_idx, 0] += (SLIDE_DISTANCE)/int(total_timesteps/2)
+                right_targets[slide_idx, 0] -= (SLIDE_DISTANCE)/int(total_timesteps/2)
+
+            # LIFTING
+            else:
+                # Setting new targets for L/R fingers to be previous node positions
+                left_targets = model.get_body_x(left_softfinger_handles[env_id])
+                right_targets = model.get_body_x(right_softfinger_handles[env_id])
+                # Manually setting targets for L/R upper idxs to compress them
+                left_targets[slide_idx, 1] += (LIFT_DISTANCE)/int(total_timesteps/2)
+                right_targets[slide_idx, 1] += (LIFT_DISTANCE)/int(total_timesteps/2)
+
+            model.set_soft_kinematic_target(left_softfinger_handles[env_id], left_targets)
+            model.set_soft_kinematic_target(right_softfinger_handles[env_id], right_targets)
+
+
+
         integrator.simulate(model, dt=dt, control=None)
         
         if args.viz:
@@ -167,4 +177,6 @@ if __name__ == "__main__":
             renderer.render(model.state())
             renderer.end_frame()
             
+        
+        sim_time += integrator.profile_helper.current_timestep_data["total_timestep"]        
         model.write_scene(os.path.join(OUT_DIR, f"frames/frame_{t}.ply"))

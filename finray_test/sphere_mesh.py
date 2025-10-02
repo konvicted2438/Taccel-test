@@ -6,8 +6,8 @@ import pyvista as pv
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- Configuration ---
-RADIUS = 0.03
-MESH_SIZE = 0.005
+RADIUS = 0.1
+MESH_SIZE = 0.03
 OUTPUT_FILENAME = "sphere.msh"
 
 # --- Script ---

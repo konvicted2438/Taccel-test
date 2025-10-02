@@ -10,37 +10,37 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def plot_largest_x_nodes(points, num_nodes=10, title="Nodes with Largest X Coordinates"):
     """
-    找到具有最大x坐标的节点，并绘制它们及其索引号
+    Find nodes with the largest x coordinates and plot them with their index numbers
     
     Args:
-        points (numpy.ndarray): 点的数组，形状为(n, 3)表示3D点
-        num_nodes (int): 要查找和绘制的最大x节点数量
-        title (str): 图的标题
+        points (numpy.ndarray): Array of points with shape (n, 3) representing 3D points
+        num_nodes (int): Number of largest x nodes to find and plot
+        title (str): Title for the plot
         
     Returns:
-        numpy.ndarray: 具有最大x坐标的节点的索引
+        numpy.ndarray: Indices of the nodes with the largest x coordinates
     """
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     
-    # 获取x坐标
+    # Get x coordinates
     x_coordinates = points[:, 0]
     
-    # 找到最大x坐标的索引 (使用负索引从排序后的数组末尾获取)
+    # Find indices of largest x coordinates (using negative indices to get from the end of the sorted array)
     largest_x_indices = np.argsort(x_coordinates)[-num_nodes:]
     
-    # 获取对应的点
+    # Get the corresponding points
     largest_x_points = points[largest_x_indices]
     
-    # 创建3D图
+    # Create 3D figure
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
     
-    # 绘制点
+    # Plot the points
     ax.scatter(largest_x_points[:, 0], largest_x_points[:, 1], largest_x_points[:, 2], 
                color='blue', s=50)
     
-    # 用索引标记点
+    # Label points with their indices
     for i, idx in enumerate(largest_x_indices):
         ax.text(largest_x_points[i, 0], largest_x_points[i, 1], largest_x_points[i, 2], 
                 f"{idx}", fontsize=12)
@@ -57,9 +57,9 @@ def plot_largest_x_nodes(points, num_nodes=10, title="Nodes with Largest X Coord
 
 
 # Load your mesh
-mesh_finray = meshio.read("./finray_test/finray_test.msh")
+mesh_finray = meshio.read("./finray_test/finray_test_vol.msh")
 mesh_object = meshio.read("./finray_test/sphere.msh")
-# 定义盒子的8个角点
+# Define the 8 corner points of the box
 # box_corners = np.array([
 #     [10, -1.9, -35.9], [10, -7.9, -1.4], [-10, -1.9, -35.9], [-10, -7.9, -1.4],
 #     [10, -0.1, -0.1], [-10, -0.1, -0.1], [10, 6.1, -34.5], [-10, 6.1, -34.5]
@@ -79,7 +79,7 @@ else:
     raise ValueError("No tetrahedral elements found in the mesh.")
 
 
-# 使用Delaunay三角剖分创建凸包
+# Use Delaunay triangulation to create a convex hull
 hull = Delaunay(box_corners)
 
 inside_indices = []

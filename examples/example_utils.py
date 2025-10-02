@@ -15,10 +15,9 @@ def set_seed(seed: int = None):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def init_robot_demo(args, demo_name: str, output_folder: str = "kurt_testplay", cache_dir: str = "./ptx"):
+def init_robot_demo(args, demo_name: str, output_folder: str = "grasping_test", cache_dir: str = "./ptx"):
     #DATETIME_TAG = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     #OUT_DIR = f"./output/{demo_name}/{DATETIME_TAG}"
-    #OUT_DIR = f"./output/{demo_name}/kurt_testplay"
     OUT_DIR = f"./output/{demo_name}/{output_folder}"
     os.makedirs(os.path.join(OUT_DIR, "frames"), exist_ok=True)
     json.dump(vars(args), open(os.path.join(OUT_DIR, "args.json"), "w"))
