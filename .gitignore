@@ -194,5 +194,9 @@ ptx/wp_taccel*
 *.DS_Store
 .ruff_cache/
 
+# Image and data files
+*.json
+*.png
+
 docs/build/
 !taccel/data
