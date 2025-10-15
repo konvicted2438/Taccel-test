@@ -128,11 +128,11 @@ if __name__ == "__main__":
 
     # Integrator setup
     integrator = IPCIntegrator()
-    integrator.use_hard_kinematic_constraint = False
+    integrator.use_hard_kinematic_constraint = True
     integrator.use_cpu = False
     integrator.max_newton_iter = 30
     integrator.max_cg_iter = 300
-    integrator.cg_rel_tol = 1e-3
+    integrator.cg_rel_tol = 1e-5
     integrator.use_inversion_free_step_size_filter = True
     integrator.inversion_free_im_tol = 1e-6
     integrator.inversion_free_cubic_coef_tol = 1e-10

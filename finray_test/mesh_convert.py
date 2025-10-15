@@ -183,7 +183,7 @@ if __name__ == '__main__':
   # Initialize Gmsh
   gmsh.initialize()
 
-  input_filepath = os.path.join(os.getcwd(), "finray_test/sphere2.msh")
+  input_filepath = os.path.join(os.getcwd(), "finray_test/sphere.msh")
   output_filepath = copy(input_filepath)
   VolumeExtractor(input_filepath, output_filepath)
 
